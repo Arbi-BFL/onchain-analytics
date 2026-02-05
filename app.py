@@ -27,6 +27,43 @@ SOLANA_WALLET = 'FeB1jqjCFKyQ2vVTPLgYmZu1yLvBWhsGoudP46fhhF8z'
 ALCHEMY_BASE_URL = f'https://base-mainnet.g.alchemy.com/v2/{ALCHEMY_API_KEY}'
 ALCHEMY_SOLANA_URL = f'https://solana-mainnet.g.alchemy.com/v2/{ALCHEMY_API_KEY}'
 
+# Price cache (refresh every 5 minutes)
+price_cache = {}
+price_cache_time = 0
+
+def get_token_prices():
+    """Fetch current ETH and SOL prices from CoinGecko"""
+    global price_cache, price_cache_time
+    
+    # Use cache if less than 5 minutes old
+    if time.time() - price_cache_time < 300 and price_cache:
+        return price_cache
+    
+    try:
+        response = requests.get(
+            'https://api.coingecko.com/api/v3/simple/price',
+            params={
+                'ids': 'ethereum,solana',
+                'vs_currencies': 'usd'
+            },
+            timeout=5
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            price_cache = {
+                'ETH': data.get('ethereum', {}).get('usd', 0),
+                'SOL': data.get('solana', {}).get('usd', 0)
+            }
+            price_cache_time = time.time()
+            logger.info(f"Updated prices: ETH=${price_cache['ETH']}, SOL=${price_cache['SOL']}")
+            return price_cache
+    except Exception as e:
+        logger.error(f"Error fetching prices: {e}")
+    
+    # Return last known prices or zero
+    return price_cache if price_cache else {'ETH': 0, 'SOL': 0}
+
 # Database setup
 DB_PATH = '/data/onchain.db'
 
@@ -166,6 +203,7 @@ def fetch_base_transactions():
 def fetch_solana_transactions():
     """Fetch recent transactions from Solana using Alchemy"""
     try:
+        # First, get transaction signatures
         response = requests.post(
             ALCHEMY_SOLANA_URL,
             json={
@@ -179,7 +217,38 @@ def fetch_solana_transactions():
         if response.status_code == 200:
             data = response.json()
             if 'result' in data:
-                return data['result']
+                signatures = data['result']
+                
+                # Fetch full transaction details for each signature
+                detailed_txs = []
+                for sig_info in signatures[:10]:  # Limit to 10 most recent
+                    sig = sig_info.get('signature')
+                    if not sig:
+                        continue
+                    
+                    # Get full transaction details
+                    tx_response = requests.post(
+                        ALCHEMY_SOLANA_URL,
+                        json={
+                            "jsonrpc": "2.0",
+                            "id": 1,
+                            "method": "getTransaction",
+                            "params": [sig, {"encoding": "jsonParsed", "maxSupportedTransactionVersion": 0}]
+                        }
+                    )
+                    
+                    if tx_response.status_code == 200:
+                        tx_data = tx_response.json()
+                        if 'result' in tx_data and tx_data['result']:
+                            detailed_txs.append({
+                                'signature': sig,
+                                'blockTime': sig_info.get('blockTime'),
+                                'slot': sig_info.get('slot'),
+                                'err': sig_info.get('err'),
+                                'details': tx_data['result']
+                            })
+                
+                return detailed_txs
         
         return []
     except Exception as e:
@@ -205,8 +274,17 @@ def process_base_transaction(tx):
     if 'rawContract' in tx and 'address' in tx['rawContract']:
         token_address = tx['rawContract']['address']
     
-    # Calculate USD value (placeholder - we'll fetch prices later)
+    # Calculate USD value
     usd_value = '0'
+    try:
+        value_float = float(tx.get('value', 0))
+        if token_symbol == 'ETH' and value_float > 0:
+            prices = get_token_prices()
+            eth_price = prices.get('ETH', 0)
+            if eth_price > 0:
+                usd_value = str(value_float * eth_price)
+    except:
+        pass
     
     tx_data = {
         'hash': tx_hash,
@@ -251,24 +329,96 @@ def process_solana_transaction(tx):
         conn.close()
         return False
     
+    # Parse transaction details
+    details = tx.get('details', {})
+    meta = details.get('meta', {})
+    transaction = details.get('transaction', {})
+    message = transaction.get('message', {})
+    
+    # Extract accounts and balance changes
+    account_keys = message.get('accountKeys', [])
+    pre_balances = meta.get('preBalances', [])
+    post_balances = meta.get('postBalances', [])
+    
+    # Find our wallet index
+    our_wallet_index = -1
+    from_address = ''
+    to_address = ''
+    value = 0
+    token_symbol = 'SOL'
+    
+    for idx, acc in enumerate(account_keys):
+        if isinstance(acc, dict):
+            acc_addr = acc.get('pubkey', '')
+        else:
+            acc_addr = acc
+        
+        if acc_addr == SOLANA_WALLET:
+            our_wallet_index = idx
+            break
+    
+    # Calculate SOL transfer amount
+    if our_wallet_index >= 0 and our_wallet_index < len(pre_balances):
+        pre_balance = pre_balances[our_wallet_index]
+        post_balance = post_balances[our_wallet_index]
+        balance_change = post_balance - pre_balance
+        
+        # Convert lamports to SOL
+        value = abs(balance_change) / 1e9
+        
+        # Determine from/to based on whether we received or sent
+        if balance_change > 0:
+            # We received
+            to_address = SOLANA_WALLET
+            # Try to find sender (account with negative balance change)
+            for idx, (pre, post) in enumerate(zip(pre_balances, post_balances)):
+                if post < pre and idx != our_wallet_index and idx < len(account_keys):
+                    acc = account_keys[idx]
+                    from_address = acc.get('pubkey', acc) if isinstance(acc, dict) else acc
+                    break
+        else:
+            # We sent
+            from_address = SOLANA_WALLET
+            # Try to find recipient (account with positive balance change)
+            for idx, (pre, post) in enumerate(zip(pre_balances, post_balances)):
+                if post > pre and idx != our_wallet_index and idx < len(account_keys):
+                    acc = account_keys[idx]
+                    to_address = acc.get('pubkey', acc) if isinstance(acc, dict) else acc
+                    break
+    
+    # Calculate USD value
+    usd_value = '0'
+    try:
+        if value > 0 and token_symbol == 'SOL':
+            prices = get_token_prices()
+            sol_price = prices.get('SOL', 0)
+            if sol_price > 0:
+                usd_value = str(value * sol_price)
+    except:
+        pass
+    
     tx_data = {
         'hash': tx_hash,
         'network': 'solana',
-        'from_address': SOLANA_WALLET,
-        'to_address': '',
-        'value': '0',
+        'from_address': from_address or SOLANA_WALLET,
+        'to_address': to_address,
+        'value': str(value),
         'timestamp': tx.get('blockTime', int(time.time())),
         'block_number': tx.get('slot', 0),
         'status': 'confirmed' if not tx.get('err') else 'failed',
-        'gas_used': '0'
+        'gas_used': '0',
+        'token_symbol': token_symbol,
+        'token_address': '',
+        'usd_value': usd_value
     }
     
     c.execute('''INSERT INTO transactions 
-                 (hash, network, from_address, to_address, value, timestamp, block_number, status, gas_used)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                 (hash, network, from_address, to_address, value, timestamp, block_number, status, gas_used, token_symbol, token_address, usd_value)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
               (tx_data['hash'], tx_data['network'], tx_data['from_address'], 
                tx_data['to_address'], tx_data['value'], tx_data['timestamp'],
-               tx_data['block_number'], tx_data['status'], tx_data['gas_used']))
+               tx_data['block_number'], tx_data['status'], tx_data['gas_used'],
+               tx_data['token_symbol'], tx_data['token_address'], tx_data['usd_value']))
     
     conn.commit()
     conn.close()
