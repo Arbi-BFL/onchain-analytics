@@ -92,8 +92,10 @@ def send_discord_notification(tx_data):
 def fetch_base_transactions():
     """Fetch recent transactions from Base using Alchemy"""
     try:
-        # Get transaction history
-        response = requests.post(
+        all_txs = []
+        
+        # Get outgoing transactions (fromAddress)
+        response_from = requests.post(
             ALCHEMY_BASE_URL,
             json={
                 "jsonrpc": "2.0",
@@ -110,12 +112,44 @@ def fetch_base_transactions():
             }
         )
         
-        if response.status_code == 200:
-            data = response.json()
+        if response_from.status_code == 200:
+            data = response_from.json()
             if 'result' in data and 'transfers' in data['result']:
-                return data['result']['transfers']
+                all_txs.extend(data['result']['transfers'])
         
-        return []
+        # Get incoming transactions (toAddress)
+        response_to = requests.post(
+            ALCHEMY_BASE_URL,
+            json={
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "alchemy_getAssetTransfers",
+                "params": [{
+                    "fromBlock": "0x0",
+                    "toBlock": "latest",
+                    "toAddress": BASE_WALLET,
+                    "category": ["external", "internal", "erc20", "erc721", "erc1155"],
+                    "withMetadata": True,
+                    "maxCount": "0x32"  # 50 transactions
+                }]
+            }
+        )
+        
+        if response_to.status_code == 200:
+            data = response_to.json()
+            if 'result' in data and 'transfers' in data['result']:
+                all_txs.extend(data['result']['transfers'])
+        
+        # Remove duplicates by hash
+        seen_hashes = set()
+        unique_txs = []
+        for tx in all_txs:
+            tx_hash = tx.get('hash', '')
+            if tx_hash and tx_hash not in seen_hashes:
+                seen_hashes.add(tx_hash)
+                unique_txs.append(tx)
+        
+        return unique_txs
     except Exception as e:
         logger.error(f"Error fetching Base transactions: {e}")
         return []
