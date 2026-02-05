@@ -105,7 +105,7 @@ def fetch_base_transactions():
                     "fromBlock": "0x0",
                     "toBlock": "latest",
                     "fromAddress": BASE_WALLET,
-                    "category": ["external", "internal", "erc20", "erc721", "erc1155"],
+                    "category": ["external", "erc20", "erc721", "erc1155"],
                     "withMetadata": True,
                     "maxCount": "0x32"  # 50 transactions
                 }]
@@ -128,7 +128,7 @@ def fetch_base_transactions():
                     "fromBlock": "0x0",
                     "toBlock": "latest",
                     "toAddress": BASE_WALLET,
-                    "category": ["external", "internal", "erc20", "erc721", "erc1155"],
+                    "category": ["external", "erc20", "erc721", "erc1155"],
                     "withMetadata": True,
                     "maxCount": "0x32"  # 50 transactions
                 }]
