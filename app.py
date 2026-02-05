@@ -115,7 +115,10 @@ def fetch_base_transactions():
         if response_from.status_code == 200:
             data = response_from.json()
             if 'result' in data and 'transfers' in data['result']:
+                logger.info(f"Found {len(data['result']['transfers'])} outgoing Base transactions")
                 all_txs.extend(data['result']['transfers'])
+            elif 'error' in data:
+                logger.error(f"Alchemy API error (outgoing): {data['error']}")
         
         # Get incoming transactions (toAddress)
         response_to = requests.post(
@@ -138,7 +141,10 @@ def fetch_base_transactions():
         if response_to.status_code == 200:
             data = response_to.json()
             if 'result' in data and 'transfers' in data['result']:
+                logger.info(f"Found {len(data['result']['transfers'])} incoming Base transactions")
                 all_txs.extend(data['result']['transfers'])
+            elif 'error' in data:
+                logger.error(f"Alchemy API error (incoming): {data['error']}")
         
         # Remove duplicates by hash
         seen_hashes = set()
