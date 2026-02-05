@@ -50,7 +50,10 @@ def init_db():
                   block_number INTEGER,
                   status TEXT,
                   gas_used TEXT,
-                  notified INTEGER DEFAULT 0)''')
+                  notified INTEGER DEFAULT 0,
+                  token_symbol TEXT,
+                  token_address TEXT,
+                  usd_value TEXT)''')
     
     # Activity snapshots table
     c.execute('''CREATE TABLE IF NOT EXISTS activity_snapshots
@@ -196,6 +199,15 @@ def process_base_transaction(tx):
         conn.close()
         return False
     
+    # Extract token information
+    token_symbol = tx.get('asset', 'ETH')  # Default to ETH for native transfers
+    token_address = ''
+    if 'rawContract' in tx and 'address' in tx['rawContract']:
+        token_address = tx['rawContract']['address']
+    
+    # Calculate USD value (placeholder - we'll fetch prices later)
+    usd_value = '0'
+    
     tx_data = {
         'hash': tx_hash,
         'network': 'base',
@@ -205,15 +217,19 @@ def process_base_transaction(tx):
         'timestamp': int(datetime.fromisoformat(tx['metadata']['blockTimestamp'].replace('Z', '+00:00')).timestamp()) if 'metadata' in tx else int(time.time()),
         'block_number': int(tx['blockNum'], 16) if 'blockNum' in tx else 0,
         'status': 'confirmed',
-        'gas_used': '0'
+        'gas_used': '0',
+        'token_symbol': token_symbol,
+        'token_address': token_address,
+        'usd_value': usd_value
     }
     
     c.execute('''INSERT INTO transactions 
-                 (hash, network, from_address, to_address, value, timestamp, block_number, status, gas_used)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                 (hash, network, from_address, to_address, value, timestamp, block_number, status, gas_used, token_symbol, token_address, usd_value)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
               (tx_data['hash'], tx_data['network'], tx_data['from_address'], 
                tx_data['to_address'], tx_data['value'], tx_data['timestamp'],
-               tx_data['block_number'], tx_data['status'], tx_data['gas_used']))
+               tx_data['block_number'], tx_data['status'], tx_data['gas_used'],
+               tx_data['token_symbol'], tx_data['token_address'], tx_data['usd_value']))
     
     conn.commit()
     conn.close()
