@@ -4,7 +4,7 @@ Onchain Analytics Dashboard for Arbi
 Tracks wallet activity on Base and Solana using Alchemy API
 """
 
-from flask import Flask, render_template, jsonify, send_from_directory
+from flask import Flask, render_template, jsonify, send_from_directory, request
 from flask_cors import CORS
 import os
 import sqlite3
