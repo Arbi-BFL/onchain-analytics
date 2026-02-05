@@ -64,6 +64,34 @@ def get_token_prices():
     # Return last known prices or zero
     return price_cache if price_cache else {'ETH': 0, 'SOL': 0}
 
+def get_token_price_dexscreener(token_address, chain='base'):
+    """Fetch token price from DexScreener"""
+    try:
+        response = requests.get(
+            f'https://api.dexscreener.com/latest/dex/tokens/{token_address}',
+            timeout=5
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            pairs = data.get('pairs', [])
+            
+            # Find the pair with highest liquidity on the correct chain
+            best_pair = None
+            for pair in pairs:
+                if pair.get('chainId', '').lower() == chain.lower():
+                    if not best_pair or float(pair.get('liquidity', {}).get('usd', 0)) > float(best_pair.get('liquidity', {}).get('usd', 0)):
+                        best_pair = pair
+            
+            if best_pair:
+                price = float(best_pair.get('priceUsd', 0))
+                logger.info(f"Found price for {token_address}: ${price}")
+                return price
+    except Exception as e:
+        logger.error(f"Error fetching token price from DexScreener: {e}")
+    
+    return 0
+
 # Database setup
 DB_PATH = '/data/onchain.db'
 
@@ -278,13 +306,19 @@ def process_base_transaction(tx):
     usd_value = '0'
     try:
         value_float = float(tx.get('value', 0))
-        if token_symbol == 'ETH' and value_float > 0:
-            prices = get_token_prices()
-            eth_price = prices.get('ETH', 0)
-            if eth_price > 0:
-                usd_value = str(value_float * eth_price)
-    except:
-        pass
+        if value_float > 0:
+            if token_symbol == 'ETH':
+                prices = get_token_prices()
+                eth_price = prices.get('ETH', 0)
+                if eth_price > 0:
+                    usd_value = str(value_float * eth_price)
+            elif token_address:
+                # Fetch token price from DexScreener
+                token_price = get_token_price_dexscreener(token_address, 'base')
+                if token_price > 0:
+                    usd_value = str(value_float * token_price)
+    except Exception as e:
+        logger.error(f"Error calculating USD value: {e}")
     
     tx_data = {
         'hash': tx_hash,
