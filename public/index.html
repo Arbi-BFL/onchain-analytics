@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Onchain Analytics - Arbi</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .navbar {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 15px 30px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+
+        .brand {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: white;
+            text-decoration: none;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+            flex: 1;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            color: white;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-card .value {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label {
+            font-size: 0.85em;
+            opacity: 0.7;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 968px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            color: white;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+
+        .card h2 {
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .transaction-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .transaction-item {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid;
+        }
+
+        .transaction-item.base {
+            border-left-color: #0052FF;
+        }
+
+        .transaction-item.solana {
+            border-left-color: #14F195;
+        }
+
+        .transaction-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .network-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .network-badge.base {
+            background: #0052FF;
+        }
+
+        .network-badge.solana {
+            background: #14F195;
+            color: #000;
+        }
+
+        .timestamp {
+            font-size: 0.85em;
+            opacity: 0.7;
+        }
+
+        .transaction-details {
+            font-size: 0.9em;
+        }
+
+        .transaction-details div {
+            margin-bottom: 5px;
+        }
+
+        .address {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            opacity: 0.8;
+        }
+
+        .chart-container {
+            height: 300px;
+            margin-top: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            opacity: 0.7;
+        }
+
+        footer {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            margin-top: auto;
+            color: white;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+
+        .footer-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 30px;
+        }
+
+        .footer-section h3 {
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+
+        .footer-section ul {
+            list-style: none;
+        }
+
+        .footer-section ul li {
+            margin-bottom: 8px;
+        }
+
+        .footer-section a {
+            color: white;
+            text-decoration: none;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+
+        .footer-section a:hover {
+            opacity: 1;
+        }
+
+        .footer-bottom {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="https://arbi.betterfuturelabs.xyz" class="brand">🤖 Arbi</a>
+    </nav>
+
+    <div class="container">
+        <div class="header">
+            <h1>📊 Onchain Analytics</h1>
+            <p>Real-time blockchain activity monitoring</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Transactions</h3>
+                <div class="value" id="total-txs">-</div>
+                <div class="label">All Networks</div>
+            </div>
+            <div class="stat-card">
+                <h3>Base Network</h3>
+                <div class="value" id="base-txs">-</div>
+                <div class="label">Transactions</div>
+            </div>
+            <div class="stat-card">
+                <h3>Solana Network</h3>
+                <div class="value" id="solana-txs">-</div>
+                <div class="label">Transactions</div>
+            </div>
+            <div class="stat-card">
+                <h3>Last 24 Hours</h3>
+                <div class="value" id="recent-txs">-</div>
+                <div class="label">Recent Activity</div>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <h2>Recent Transactions</h2>
+                <div class="transaction-list" id="transaction-list">
+                    <div class="loading">Loading transactions...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Network Status</h2>
+                <div id="network-status">
+                    <div style="margin-bottom: 20px;">
+                        <div style="font-size: 0.9em; opacity: 0.8; margin-bottom: 5px;">🔵 Base</div>
+                        <div style="font-size: 1.5em; font-weight: bold;" id="base-status">Active</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.9em; opacity: 0.8; margin-bottom: 5px;">🟣 Solana</div>
+                        <div style="font-size: 1.5em; font-weight: bold;" id="solana-status">Active</div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 30px;">
+                    <h3 style="font-size: 1.1em; margin-bottom: 15px;">Monitored Wallets</h3>
+                    <div style="font-size: 0.85em; opacity: 0.8; margin-bottom: 10px;">
+                        <div style="margin-bottom: 5px;">Base:</div>
+                        <div class="address">0x75f3...c5e6</div>
+                    </div>
+                    <div style="font-size: 0.85em; opacity: 0.8;">
+                        <div style="margin-bottom: 5px;">Solana:</div>
+                        <div class="address">FeB1...hF8z</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-section">
+                <h3>Connect</h3>
+                <ul>
+                    <li><a href="https://x.com/Arbi_BFL" target="_blank">Twitter/X</a></li>
+                    <li><a href="https://github.com/Arbi-BFL" target="_blank">GitHub</a></li>
+                    <li><a href="mailto:arbi@betterfuturelabs.xyz">Email</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h3>Wallets</h3>
+                <ul>
+                    <li><a href="https://basescan.org/address/0x75f39d9Bff76d376F3960028d98F324aAbB6c5e6" target="_blank">Base Explorer</a></li>
+                    <li><a href="https://explorer.solana.com/address/FeB1jqjCFKyQ2vVTPLgYmZu1yLvBWhsGoudP46fhhF8z" target="_blank">Solana Explorer</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h3>Services</h3>
+                <ul>
+                    <li><a href="https://arbi.betterfuturelabs.xyz">Main Dashboard</a></li>
+                    <li><a href="https://wallet.arbi.betterfuturelabs.xyz">Wallet</a></li>
+                    <li><a href="https://docs.arbi.betterfuturelabs.xyz">Documentation</a></li>
+                    <li><a href="https://analytics.arbi.betterfuturelabs.xyz">Analytics</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h3>About</h3>
+                <ul>
+                    <li>Autonomous AI Agent</li>
+                    <li>Building on Base & Solana</li>
+                    <li>Better Future Labs</li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>🤖 Built by Arbi • Powered by Alchemy & OpenClaw</p>
+        </div>
+    </footer>
+
+    <script>
+        async function fetchStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                
+                document.getElementById('total-txs').textContent = data.total_transactions || 0;
+                document.getElementById('base-txs').textContent = data.base_transactions || 0;
+                document.getElementById('solana-txs').textContent = data.solana_transactions || 0;
+                document.getElementById('recent-txs').textContent = data.recent_24h || 0;
+            } catch (error) {
+                console.error('Error fetching stats:', error);
+            }
+        }
+
+        async function fetchTransactions() {
+            try {
+                const response = await fetch('/api/transactions?limit=20');
+                const transactions = await response.json();
+                
+                const listEl = document.getElementById('transaction-list');
+                
+                if (transactions.length === 0) {
+                    listEl.innerHTML = '<div class="loading">No transactions yet. Monitoring active...</div>';
+                    return;
+                }
+                
+                listEl.innerHTML = transactions.map(tx => {
+                    const date = new Date(tx.timestamp * 1000);
+                    const timeStr = date.toLocaleString();
+                    const valueEth = tx.network === 'base' ? 
+                        (parseFloat(tx.value) / 1e18).toFixed(6) :
+                        (parseFloat(tx.value) / 1e9).toFixed(6);
+                    
+                    return `
+                        <div class="transaction-item ${tx.network}">
+                            <div class="transaction-header">
+                                <span class="network-badge ${tx.network}">${tx.network}</span>
+                                <span class="timestamp">${timeStr}</span>
+                            </div>
+                            <div class="transaction-details">
+                                <div>Hash: <span class="address">${tx.hash.substring(0, 16)}...</span></div>
+                                <div>From: <span class="address">${tx.from_address.substring(0, 10)}...${tx.from_address.substring(tx.from_address.length - 8)}</span></div>
+                                ${tx.to_address ? `<div>To: <span class="address">${tx.to_address.substring(0, 10)}...${tx.to_address.substring(tx.to_address.length - 8)}</span></div>` : ''}
+                                ${parseFloat(tx.value) > 0 ? `<div>Value: ${valueEth} ${tx.network === 'base' ? 'ETH' : 'SOL'}</div>` : ''}
+                                <div>Status: ${tx.status}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error fetching transactions:', error);
+                document.getElementById('transaction-list').innerHTML = 
+                    '<div class="loading">Error loading transactions</div>';
+            }
+        }
+
+        // Initial load
+        fetchStats();
+        fetchTransactions();
+
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            fetchStats();
+            fetchTransactions();
+        }, 30000);
+    </script>
+</body>
+</html>

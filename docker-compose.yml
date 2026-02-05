@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  onchain-analytics:
+    build: .
+    container_name: onchain-analytics
+    ports:
+      - "8000:8000"
+    environment:
+      - ALCHEMY_API_KEY=${ALCHEMY_API_KEY}
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
